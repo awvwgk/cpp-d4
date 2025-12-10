@@ -151,7 +151,24 @@ cat >> qcdftd4.h << 'EOT'
 // https://doi.org/10.1063/1.5090222
 // Bernardo de Souza, 14/09/2023
  -------------------------------------------------------------------------------------- */
-int CalcEEQCharges(TRMatrix &XYZ, TIVector &ATNO, int NAtoms, int totalcharge, TRVector &q, bool printerror=true);
+int CalcEEQCharges(TRMatrix &XYZ, TIVector &ATNO, int NAtoms, int totalcharge, TRVector &q,
+                   bool printerror=true, bool allowallatoms=false);
+
+/* --------------------------------------------------------------------------------------
+// Calculates the EEQ-BC charges according to the paper
+// https://doi.org/10.1063/5.0268978
+// Thomas Rose, 14/10/2025
+ -------------------------------------------------------------------------------------- */
+int CalcEEQBCCharges(TRMatrix &XYZ, TIVector &ATNO, int NAtoms, int totalcharge, TRVector &q
+                   , bool printerror=true, bool allowalaltoms=false);
+
+/* --------------------------------------------------------------------------------------
+// Calculates the coordination number and the EEQ charges as done in the D4 paper
+// https://doi.org/10.1063/1.5090222
+// Miquel Garcia-Ratés, 03/2024
+ -------------------------------------------------------------------------------------- */
+int CalcCNEEQ(TOrcaInfo &DAT, TGeomInput &GEO, TRVector &CN, TRVector &Q, TRMatrix &GRADQ,
+              bool lgrad, bool printerror=true);
 
 #endif // __QCDFTD4_H
 
@@ -196,18 +213,12 @@ cat > qcdftd4.cpp << 'EOT'
 // https://doi.org/10.1063/1.5090222
 // Bernardo de Souza, 14/09/2023
  -------------------------------------------------------------------------------------- */
-int CalcEEQCharges(TRMatrix &XYZ, TIVector &ATNO, int NAtoms, int totalcharge, TRVector &q, bool printerror){
+int CalcEEQCharges(TRMatrix &XYZ, TIVector &ATNO, int NAtoms,
+                   int totalcharge, TRVector &q,
+                   bool printerror, bool allowallatoms){
 
   // initialize the charges to zero
   q.Init();
-
-  // check atomic numbers to guarantee we have all parameters
-  // ghost atoms (ATNO=0) will have no charge
-  for (int i=0;i<NAtoms;i++)
-    if (ATNO(i)>86){
-      if (printerror) printMessage("Atomic number %d detected. EEQ charges can not be calculated.\n",ATNO(i));
-      return 1;
-    }
 
   TGeomInput molecule;
   molecule.NAtoms=NAtoms;
@@ -217,11 +228,121 @@ int CalcEEQCharges(TRMatrix &XYZ, TIVector &ATNO, int NAtoms, int totalcharge, T
   for (int i=0;i<NAtoms;i++) Index(i)=i;
   TRMatrix dist;
   dist.NewMatrix(NAtoms, NAtoms);
+  multicharge::EEQModel chrg_model;
+  // check atomic numbers to guarantee we have all parameters
+  // ghost atoms (ATNO=0) will have no charge
+  for (int i=0;i<NAtoms;i++){
+    if (molecule.ATNO(i)>86){
+      if (!allowallatoms){
+        if (printerror) printMessage("Atomic number %d detected. EEQ charges can not be calculated.\n",ATNO(i));
+        return 1;
+      }
+      // reduce to the previous row
+      else{
+        molecule.ATNO(i) -= 32;
+      }
+    }
+  }
+
   dftd4::calc_distances(molecule, Index, dist);
 
   TRMatrix dqdr;
 
-  return dftd4::get_charges(molecule, Index, dist, totalcharge, 25, q, dqdr, false);
+  return chrg_model.get_charges(molecule, Index, dist, totalcharge, 25, q, dqdr, false);
+}
+
+/* --------------------------------------------------------------------------------------
+// Calculates the EEQ-BC charges according to the paper
+// https://doi.org/10.1063/5.0268978
+// Thomas Rose, 14/10/2025
+ -------------------------------------------------------------------------------------- */
+int CalcEEQBCCharges(TRMatrix &XYZ, TIVector &ATNO, int NAtoms,
+                   int totalcharge, TRVector &q,
+                   bool printerror, bool allowallatoms){
+
+  // initialize the charges to zero
+  q.Init();
+
+  TGeomInput molecule;
+  molecule.NAtoms=NAtoms;
+  molecule.CC.CopyMat(XYZ);
+  molecule.ATNO.CopyVec(ATNO);
+  TIVector Index(NAtoms);
+  for (int i=0;i<NAtoms;i++) Index(i)=i;
+  TRMatrix dist;
+  dist.NewMatrix(NAtoms, NAtoms);
+  multicharge::EEQBCModel chrg_model;
+  // check atomic numbers to guarantee we have all parameters
+  // ghost atoms (ATNO=0) will have no charge
+  for (int i=0;i<NAtoms;i++){
+    if (molecule.ATNO(i)>103){
+      if (!allowallatoms){
+        if (printerror) printMessage("Atomic number %d detected. EEQ-BC charges can not be calculated.\n",ATNO(i));
+        return 1;
+      }
+      // reduce to the previous row
+      else{
+        molecule.ATNO(i) -= 32;
+      }
+    }
+  }
+
+
+  dftd4::calc_distances(molecule, Index, dist);
+
+  TRMatrix dqdr;
+
+  return chrg_model.get_charges(molecule, Index, dist, totalcharge, 25, q, dqdr, false);
+}
+
+/* --------------------------------------------------------------------------------------
+// Calculates the coordination number and the EEQ charges as done in the D4 paper
+// https://doi.org/10.1063/1.5090222
+// Miquel Garcia-Ratés, 03/2024
+ -------------------------------------------------------------------------------------- */
+int CalcCNEEQ(TOrcaInfo &DAT, TGeomInput &GEO, TRVector &CN, TRVector &Q, TRMatrix &GRADQ,
+              bool lgrad, bool printerror){
+
+  // setup variables
+  int info{0};
+
+  int NAtoms = GEO.NAtoms;
+
+  TGeomInput molecule;
+  molecule.NAtoms = NAtoms;
+  molecule.CC.CopyMat(GEO.CC);
+  molecule.ATNO.CopyVec(GEO.ATNO);
+  TIVector Index(NAtoms);
+  for (int i=0;i<NAtoms;i++) Index(i) = i;
+
+  // Calculate distances
+  TRMatrix dist;
+  dist.NewMatrix(NAtoms, NAtoms);
+  dftd4::calc_distances(molecule, Index, dist);
+  multicharge::EEQModel eeq_model;
+  const double kcn = 7.5, norm_exp = 1.0, cutoff = 30.0;
+  dftd4::NCoordErfD4 ncoord_erf_d4 = dftd4::NCoordErfD4(kcn, norm_exp, cutoff);
+
+  TMatrix<double> dcndr;    // derivative of D4-CN
+
+  int nat = Index.Max() + 1;
+
+  Q.NewVector(NAtoms);
+  if (lgrad) {
+    dcndr.NewMatrix(3*NAtoms, nat);
+    GRADQ.NewMatrix(3*NAtoms, nat);
+  }
+
+  // calculate partial charges from EEQ model
+  info = eeq_model.get_charges(molecule, Index, dist, DAT.Charge, 25.0, Q, GRADQ, lgrad);
+  if (info != EXIT_SUCCESS) return info;
+
+  // get the D4 coordination number
+  info = ncoord_erf_d4.get_ncoord(molecule, Index, dist, CN, dcndr, lgrad);
+  if (info != EXIT_SUCCESS) return info;
+
+  return 0;
+
 }
 
 namespace dftd4 {

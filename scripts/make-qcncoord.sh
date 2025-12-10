@@ -25,11 +25,11 @@ cat > qcncoord.h << 'EOT'
  * Marvin Friede <friede@thch.uni-bonn.de> (MF121223)
  */
 
-#ifndef QCNCOORD_H
-#define QCNCOORD_H
+#pragma once
 
 #include "qcinpdat.h" // TGeomInput class
 #include "qcmat1.h"   // TRVector and TRMatrix class
+#include "qc_multicharge_param.h"  // Chargemodel Parameters
 
 namespace dftd4 {
 
@@ -40,8 +40,6 @@ rm ncoord.txt
 
 cat >> qcncoord.h << 'EOT'
 } // namespace dftd4
-
-#endif // QCNCOORD_H
 EOT
 
 ######

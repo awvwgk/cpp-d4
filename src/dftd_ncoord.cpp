@@ -267,18 +267,18 @@ int NCoordBase::dr_ncoord_base(
       cn(ii) += countf;
       cn(jj) += countf * f_directed;
 
-      dcountf = f_en * dr_count_fct(r, rcovij) / rcovij;
+      dcountf = f_en * dr_count_fct(r, rcovij) / pow(rcovij, norm_exp);
       dcndr(jj, 3 * jj    ) -= dcountf * rx * f_directed;
       dcndr(jj, 3 * jj + 1) -= dcountf * ry * f_directed;
       dcndr(jj, 3 * jj + 2) -= dcountf * rz * f_directed;
 
-      dcndr(jj, 3 * ii    ) += dcountf * rx;
-      dcndr(jj, 3 * ii + 1) += dcountf * ry;
-      dcndr(jj, 3 * ii + 2) += dcountf * rz;
+      dcndr(jj, 3 * ii    ) += dcountf * rx * f_directed;
+      dcndr(jj, 3 * ii + 1) += dcountf * ry * f_directed;
+      dcndr(jj, 3 * ii + 2) += dcountf * rz * f_directed;
 
-      dcndr(ii, 3 * jj    ) -= dcountf * rx * f_directed;
-      dcndr(ii, 3 * jj + 1) -= dcountf * ry * f_directed;
-      dcndr(ii, 3 * jj + 2) -= dcountf * rz * f_directed;
+      dcndr(ii, 3 * jj    ) -= dcountf * rx;
+      dcndr(ii, 3 * jj + 1) -= dcountf * ry;
+      dcndr(ii, 3 * jj + 2) -= dcountf * rz;
 
       dcndr(ii, 3 * ii    ) += dcountf * rx;
       dcndr(ii, 3 * ii + 1) += dcountf * ry;

@@ -54,6 +54,7 @@ int test_multi_functions(){
   info = get_molecule(mb16_43_01_n, mb16_43_01_atoms, mb16_43_01_coord, mol);
   if (info != EXIT_SUCCESS) {
      printf("Multicharge: Functions, Failed to set up molecule.");
+     fflush(stdout);
      return info;
   }
   
@@ -71,12 +72,13 @@ int test_multi_functions(){
   TVector<double> q;
   TMatrix<double> dqdr;
   q.NewVector(mb16_43_01_n);
-  dqdr.NewMatrix(mb16_43_01_n, mb16_43_01_n);
+  dqdr.NewMatrix(3*mb16_43_01_n, mb16_43_01_n);
 
-  eeqbc_model.get_cn(mol, realIdx, dist, cn, dcndr, false);
-  info = eeqbc_model.eeq_chrgeq(mol, realIdx, dist, cn, dcndr, mb16_43_01_charge, q, dqdr, false, false);
+  eeqbc_model.get_cn(mol, realIdx, dist, cn, dcndr, true);
+  info = eeqbc_model.eeq_chrgeq(mol, realIdx, dist, cn, dcndr, mb16_43_01_charge, q, dqdr, true, false);
   if (info != EXIT_SUCCESS) {
      printf("Multicharge: Functions, Failed to calculate charges.");
+     fflush(stdout);
      return info;
   }
 
@@ -84,6 +86,54 @@ int test_multi_functions(){
   for (int i=0; i < mol.NAtoms; i++) {
     if (check(q(i), qvec_reference[i], 1.0E-8) == EXIT_FAILURE) {
         print_fail("Multicharge: Functions, Partial charge differs from reference.", q(i), qvec_reference[i]);
+        return EXIT_FAILURE;
+    }
+  }
+
+  return EXIT_SUCCESS;
+}
+
+// Test member functions of ChargeModel and derived classes
+int test_eeqbc_amalgam(){
+  int info;
+  // assemble molecule
+  TMolecule mol;
+  info = get_molecule(amalgam_n, amalgam_atoms, amalgam_coord, mol);
+  if (info != EXIT_SUCCESS) {
+     printf("Multicharge: Functions, Failed to set up molecule.");
+     fflush(stdout);
+     return info;
+  }
+  
+  // Test EEQ-BC member functions
+  multicharge::EEQBCModel eeqbc_model;
+  TIVector realIdx;
+  TMatrix<double> dist;
+  dftd4::initializeRealIdx(amalgam_n, realIdx);
+  dist.NewMatrix(amalgam_n, amalgam_n);
+  dftd4::calc_distances(mol, realIdx, dist);
+  TVector<double> cn;
+  TMatrix<double> dcndr;
+
+  // Calculate partial charges
+  TVector<double> q;
+  TMatrix<double> dqdr;
+  q.NewVector(amalgam_n);
+  dqdr.NewMatrix(3*amalgam_n, amalgam_n);
+
+  eeqbc_model.get_cn(mol, realIdx, dist, cn, dcndr, true);
+
+  info = eeqbc_model.eeq_chrgeq(mol, realIdx, dist, cn, dcndr, amalgam_charge, q, dqdr, false, false);
+  if (info != EXIT_SUCCESS) {
+     printf("Multicharge: Failed to calculate charges.");
+     fflush(stdout);
+     return info;
+  }
+
+  // Check against multicharge reference calculation
+  for (int i=0; i < mol.NAtoms; i++) {
+    if (check(q(i), qvec_amalgam_reference[i], 1.0E-8) == EXIT_FAILURE) {
+        print_fail("Multicharge: Functions, Partial charge differs from reference for amalgam.", q(i), qvec_amalgam_reference[i]);
         return EXIT_FAILURE;
     }
   }
@@ -101,6 +151,10 @@ int test_multi(){
 
   // Test member functions of the ChargeModel and derived classes
   info = test_multi_functions();
+  if (info != EXIT_SUCCESS) return info;
+
+  // Test amalgam structure
+  info = test_eeqbc_amalgam();
   if (info != EXIT_SUCCESS) return info;
 
   return EXIT_SUCCESS;
